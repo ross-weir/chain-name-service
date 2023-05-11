@@ -25,6 +25,56 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
   val fakeScript = "sigmaProp(true)"
   lazy val minStorageRent = 100000L
 
+  "RandomTest" should "dothing" in {
+    val script =
+      s"""{
+         |  val a: Coll[Byte] = Coll(".")
+         |  val b: Coll[Byte] = Coll(2.toByte)
+         |  val c = a ++ b
+         |
+         |  sigmaProp(c.size == 2)
+         |}""".stripMargin
+
+    ergoClient.execute(ctx => {
+      val prover = ctx.newProverBuilder()
+        .withDLogSecret(BigInt.apply(0).bigInteger)
+        .build()
+
+      val tb = ctx.newTxBuilder()
+
+      val map = new PlasmaMap[String, String](AvlTreeFlags.AllOperationsAllowed, PlasmaParameters.default)
+      val insertion = map.insert(("40e9e6112fc16e191e69d042890945b97a3eb30bccd3f39d5a07ee5e91b5fbbc", "01"))
+
+      val inBox =
+        tb
+          .outBoxBuilder
+          .value(100000000000000000L)
+          .registers(map.ergoValue)
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), script))
+          .build()
+          .convertToInputWith("f9e5ce5aa0d95f5d54a7bc89c46730d9662397067250aa18a0039631c0f5b807", 1)
+          .withContextVars(new ContextVar(0.toByte, insertion.proof.ergoValue))
+
+      val outBox =
+        tb
+          .outBoxBuilder()
+          .registers(map.ergoValue)
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), script))
+          .build()
+
+      val tx = tb
+        .fee(1e7.toLong)
+        .addInputs(inBox)
+        .addOutputs(outBox)
+        .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
+        .build()
+
+      val _ = prover.sign(tx)
+
+      println("success")
+    })
+  }
+
   "NewRegistrar" should "fail if RegistryAdmin data input is missing" in {
     ergoClient.execute(ctx => {
       val prover = ctx.newProverBuilder()

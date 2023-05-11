@@ -19,12 +19,13 @@
   //
   // [2] Mint Resolver
   // Creates a resolver box/nft that is used for address resolution.
-  // This action is called by users to create resolvers for their specified name and registrar.
+  // This action is called by users to create resolvers for their specified label (name) and registrar (TLD).
   //
   //   Input         |  Output        |  Data-Input
   // -----------------------------------------------
   // 0 Registry      |  Registry      |
   // 1 MintResolver  |  MintResolver  |
+  // 2               |  Resolver      |
   //
   // REGISTERS
   //  R4: (AvlTree) Registrars Avl tree.

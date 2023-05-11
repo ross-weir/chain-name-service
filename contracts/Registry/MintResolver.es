@@ -5,7 +5,7 @@
   //
   // [1] Mint Resolver
   // Creates a resolver box/nft that is used for address resolution.
-  // This action is called by users to create resolvers for their specified name and registrar.
+  // This action is called by users to create resolvers for their specified label (name) and registrar (TLD).
   //
   //   Input         |  Output        |  Data-Input
   // -----------------------------------------------
@@ -14,13 +14,18 @@
   // 2               |  Resolver      |
   //
   // REGISTERS
-  //  R4: (Coll[Byte]) Name that is used to resolve an address.
+  //  R4: (Coll[Byte]) Label (name) that is used to resolve an address.
   //  R5: (Coll[Byte]) Registrar/TLD, "erg" for example.
   //  R6: (Coll[Byte]) Address to resolve to, this should be set based on the TLD.
   //                   For example if TLD is "erg" an Ergo address, if TLD is "ada" a Cardano address.
+  //
   // VARIABLES
   //  0: (Coll[Byte]) Registrars AVL tree proof
   //  1: (Coll[Byte]) Resolvers AVL tree proof
+
+  // constants
+  // Could use a configuration box or something?
+  val MaxLabelLength = 15 // could probably be longer?
 
   // indexes
   val registryIndex = 0
@@ -34,17 +39,20 @@
   val resolverOutBox = OUTPUTS(resolverIndex)
 
   // registers
-  val name = SELF.R4[Coll[Byte]].get
+  val label = SELF.R4[Coll[Byte]].get
   val registrarTld = SELF.R5[Coll[Byte]].get
 
   // scripts
   val resolverScriptHash = fromBase16("$resolverScriptHash")
 
+  val expectedNftId = INPUTS(0).id
+
   // validity
-  val validName = {
-    // name doesnt contain invalid characters
-    // name is below max length
-    true
+  val validLabel = {
+    val validLength = label.size <= MaxLabelLength
+    // TODO label doesnt contain invalid characters
+
+    validLength
   }
 
   val validTld = {
@@ -57,25 +65,20 @@
 
   val validResolverBox = {
     val validScript = blake2b256(resolverOutBox.propositionBytes) == resolverScriptHash
-    // out box r4 should be the name
-    // out box r5 should be the tld
-    // out box should have token with 1 count (NFT), tokens(0)._2 == 1L
-    //    origin of the nft is used to prove authenticity
-    //    namehash -> nft key,values should be added to registrys resolver AVL tree
-    true
+    val validOutLabel = resolverOutBox.R4[Coll[Byte]].get == label
+    val validOutTld = resolverOutBox.R5[Coll[Byte]].get == registrarTld
+    val nft = resolverOutBox.tokens(0)
+    val validOutNft = nft._1 == expectedNftId && nft._2 == 1L
+
+    validScript && validOutLabel && validOutTld && validOutNft
   }
 
   val validResolverTreeUpdate = {
     val resolversProof = getVar[Coll[Byte]](1).get
     val currentResolvers = registryInBox.R5[AvlTree].get
+    val hashedResolver = blake2b256(label ++ tld)
 
-    // TODO do we need to check if name already exists?
-    // TODO concat properly
-    val hashedResolver = blake2b256(name ++ tld)
-    // TODO get actual nft value
-    val resolverNft = fromBase16("01")
-
-    val insertOps: Coll[(Coll[Byte], Coll[Byte])] = Coll((hashedResolver, resolverNft))
+    val insertOps: Coll[(Coll[Byte], Coll[Byte])] = Coll((hashedResolver, expectedNftId)) // expectedNftId validated in validResolverBox
     val expectedResolvers = currentResolvers.insert(insertOps, resolversProof).get
     val updatedResolvers = registryOutBox.R5[AvlTree].get
 
@@ -94,7 +97,7 @@
     successorOutBox.tokens == SELF.tokens // nft preserved
 
   sigmaProp(
-    validName &&
+    validLabel &&
     validTld &&
     validResolverBox &&
     validResolverTreeUpdate &&

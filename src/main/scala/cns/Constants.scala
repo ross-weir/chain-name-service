@@ -25,4 +25,6 @@ object Constants {
   val registryScript = readContract("Registry/Registry.es")
 
   val newRegistrarScript = readContract("Registry/NewRegistrar.es")
+
+  val mintResolverScript = readContract("Registry/MintResolver.es")
 }
