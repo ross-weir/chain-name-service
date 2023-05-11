@@ -17,9 +17,18 @@
   // 0 Registry      |  Registry      |  RegistryAdmin
   // 1 NewRegistrar  |  NewRegistrar  |
   //
+  // [2] Mint Resolver
+  // Creates a resolver box/nft that is used for address resolution.
+  // This action is called by users to create resolvers for their specified name and registrar.
+  //
+  //   Input         |  Output        |  Data-Input
+  // -----------------------------------------------
+  // 0 Registry      |  Registry      |
+  // 1 MintResolver  |  MintResolver  |
+  //
   // REGISTERS
-  //  R4: (AvlTree) Registrars Avl tree
-  //  R5: (AvlTree) Resolvers Avl tree
+  //  R4: (AvlTree) Registrars Avl tree.
+  //  R5: (AvlTree) Resolvers Avl tree.
 
   // indexes
   val selfIndex = 0
