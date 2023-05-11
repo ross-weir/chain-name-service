@@ -1,8 +1,20 @@
-scalaVersion := "2.13.8"
+scalaVersion := "2.12.17"
 
 name := "chain-name-service"
 version := "0.1"
 
-libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.2.0"
-libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.15"
-libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.15" % "test"
+resolvers ++= Seq(
+  "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/",
+  "SonaType" at "https://oss.sonatype.org/content/groups/public",
+  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+  "New Sonatype Releases" at "https://s01.oss.sonatype.org/content/repositories/releases/",
+  "Bintray" at "https://jcenter.bintray.com/"
+)
+
+libraryDependencies ++= Seq(
+  "org.scala-lang.modules" %% "scala-parser-combinators" % "2.2.0",
+  "org.scalactic" %% "scalactic" % "3.2.15",
+  "org.scalatest" %% "scalatest" % "3.2.15" % "test",
+  "org.ergoplatform" %% "ergo-appkit" % "5.0.1",
+  "io.github.getblok-io" %% "getblok_plasma" % "1.0.1"
+)

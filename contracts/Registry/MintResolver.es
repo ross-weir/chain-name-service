@@ -5,5 +5,7 @@
   // out box r4 should be the name
   // out box r5 should be the tld
 
+  // name doesnt contain invalid characters
+
   // registry should be sent correct mint price
 }

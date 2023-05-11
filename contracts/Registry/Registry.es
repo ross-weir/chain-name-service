@@ -30,8 +30,8 @@
   val actionInBox = INPUTS(actionIndex)
 
   // nfts
-  val newRegistrarNft = fromBase64("$newRegistrarNft")
-  val mintResolverNft = fromBase64("$mintResolverNft")
+  val newRegistrarNft = fromBase16("$newRegistrarNft")
+  val mintResolverNft = fromBase16("$mintResolverNft")
 
   // registers
   val inRegistrarsState = SELF.R4[AvlTree].get

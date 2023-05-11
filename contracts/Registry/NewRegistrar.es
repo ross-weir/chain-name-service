@@ -36,7 +36,7 @@
   val registryAdminBoxIndex = 0
 
   // nfts
-  val registryAdminNft = fromBase64("$registryAdminNft")
+  val registryAdminNft = fromBase16("$registryAdminNft")
 
   // boxes
   val successorOutBox = OUTPUTS(selfIndex)
@@ -47,14 +47,17 @@
   // validity
   val validNewRegistrar = {
     val proof = getVar[Coll[Byte]](0).get
-    val newRegistrar = SELF.R4[Coll[Byte]].get
+    val newRegistrar = blake2b256(SELF.R4[Coll[Byte]].get)
     val currentRegistrars = registryInBox.R4[AvlTree].get
 
     // registrar shouldn't already exist
-    val registrarExists = currentRegistrars.get(newRegistrar, proof).isDefined
+    val registrarExists = currentRegistrars.contains(newRegistrar, proof)
 
     // registrars state updated correctly
-    val expectedRegistrarsState = currentRegistrars.insert(newRegistrar, proof).get
+    val insertVal: Coll[Byte] = Coll(1.toByte)
+    val insertOps: Coll[(Coll[Byte], Coll[Byte])] = Coll((newRegistrar, insertVal))
+
+    val expectedRegistrarsState = currentRegistrars.insert(insertOps, proof).get
     val actualRegistrarsState = registryOutBox.R4[AvlTree].get
     val validStateUpdate = expectedRegistrarsState.digest == actualRegistrarsState.digest
 
@@ -67,6 +70,7 @@
 
   // user permissions valid
   // TODO can anyone use this as a data input or only the owner of the box?
+  // this might need to be a spendable box, not a data input
   val isAdmin = registryAdminBox.tokens(0)._1 == registryAdminNft
 
   sigmaProp(isAdmin && validSuccessorBox && validNewRegistrar)
