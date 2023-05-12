@@ -2,11 +2,10 @@
 
 - We could allow only submitting hashed names for better anon - chain observers couldn't see what name was used for resolution but then couldn't check for illegal characters
   - Should we have illegal characters or allow everything?
-- If I try insert a key in an AVL tree that already contains a key does the ergoscript fail? (do I need `contains` check before insert?)
 
 ## TODO
 
-- `RewRegistrar` admin check needs to be validated, if anyone can use a box belonging to anyone as a data input it wont work
+- `NewRegistrar` admin check needs to be validated, if anyone can use a box belonging to anyone as a data input it wont work
 - Fees for contract developer & ui developer when minting a Resolver
 - Stable pricing using oracle USD price feed
 - Scalability - only one name can be minted per tx (per block i think?)
@@ -23,7 +22,7 @@ TODO: setup test fixtures so all test cases use exactly the same tx as the succe
 
 - [x] fail if RegistryAdmin data input is missing
 - [x] fail if RegistryAdmin data input has incorrect nft
-- [x] fail if registrar already exists
+- [ ] fail if registrar already exists
 - [x] fail if registrars state in Registry isn't updated correctly (AVL digest mismatch)
 - [ ] fail if successor box propBytes changed or nft changed
 - [x] add new registrar to Registry

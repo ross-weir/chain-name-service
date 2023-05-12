@@ -50,9 +50,6 @@
     val newRegistrar = blake2b256(SELF.R4[Coll[Byte]].get)
     val currentRegistrars = registryInBox.R4[AvlTree].get
 
-    // registrar shouldn't already exist
-    val registrarExists = currentRegistrars.contains(newRegistrar, proof)
-
     // registrars state updated correctly
     val insertVal: Coll[Byte] = Coll(1.toByte)
     val insertOps: Coll[(Coll[Byte], Coll[Byte])] = Coll((newRegistrar, insertVal))
@@ -61,7 +58,7 @@
     val actualRegistrarsState = registryOutBox.R4[AvlTree].get
     val validStateUpdate = expectedRegistrarsState.digest == actualRegistrarsState.digest
 
-    !registrarExists && validStateUpdate
+    validStateUpdate
   }
 
   // successor box valid
