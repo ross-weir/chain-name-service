@@ -1,6 +1,12 @@
 package cns
 
+import org.ergoplatform.ErgoAddressEncoder
+import org.ergoplatform.ErgoAddressEncoder.TestnetNetworkPrefix
+import scorex.crypto.hash.{Blake2b256, Digest32}
+
 object Constants {
+  val network: ErgoAddressEncoder.NetworkPrefix = TestnetNetworkPrefix
+
   // Registry action nfts
   val newRegistrarNft = "e66257a0f046789ecb95893f56a16e4446880b874b763d1f8cdc287abecc6c58"
   val mintResolverNft = "ba57c53a215c8d135ff067e3e7b3a11da64690041a20f659e3a1cc14b1c7ae37"
@@ -9,22 +15,27 @@ object Constants {
   val nftDictionary: Map[String, String] = Map(
     "newRegistrarNft" -> newRegistrarNft,
     "mintResolverNft" -> mintResolverNft,
-    "registryAdminNft" -> registryAdminNft
+    "registryAdminNft" -> registryAdminNft,
+    "resolverScriptHash" -> Utils.bytesToHex(resolverScriptHash)
   )
 
-  def substitute(contract: String): String = {
-    nftDictionary.foldLeft(contract) { case (c, (k, v)) =>
+  private def substitute(contract: String, subs: Map[String, String]): String = {
+    subs.foldLeft(contract) { case (c, (k, v)) =>
       c.replace("$" + k, v)
     }
   }
 
-  def readContract(path: String) = {
-    substitute(scala.io.Source.fromFile("contracts/" + path, "utf-8").getLines.mkString("\n"))
+  private def readContract(path: String, subs: Map[String, String]) = {
+    substitute(scala.io.Source.fromFile("contracts/" + path, "utf-8").getLines.mkString("\n"), subs)
   }
 
-  val registryScript = readContract("Registry/Registry.es")
+  lazy val resolverScript: String = readContract("Resolver.es", Map.empty)
+  private lazy val resolverScriptTree = Utils.compile(Map.empty, resolverScript, network)
+  lazy val resolverScriptHash: Digest32 = Blake2b256.hash(resolverScriptTree.bytes)
 
-  val newRegistrarScript = readContract("Registry/NewRegistrar.es")
+  val registryScript: String = readContract("Registry/Registry.es", nftDictionary)
 
-  val mintResolverScript = readContract("Registry/MintResolver.es")
+  val newRegistrarScript: String = readContract("Registry/NewRegistrar.es", nftDictionary)
+
+  val mintResolverScript: String = readContract("Registry/MintResolver.es", nftDictionary)
 }

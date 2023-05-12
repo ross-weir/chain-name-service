@@ -22,24 +22,28 @@ TODO: setup test fixtures so all test cases use exactly the same tx as the succe
 
 - [x] fail if RegistryAdmin data input is missing
 - [x] fail if RegistryAdmin data input has incorrect nft
-- [ ] fail if registrar already exists
+- [x] fail if registrar already exists
 - [x] fail if registrars state in Registry isn't updated correctly (AVL digest mismatch)
 - [ ] fail if successor box propBytes changed or nft changed
 - [x] add new registrar to Registry
 
 ### `MintResolver.es`
 
-- [ ] fail if `tld` doesn't exist in registrars AVL tree
-- [ ] fail if `label` is invalid (TODO what is a "valid" label)
-- [ ] ensure `Resolver` out box
-  - [ ] propBytes == `Resolver.es`
-  - [ ] matches in-box `label`
-  - [ ] matches in-box `tld`
-  - [ ] contains nft
-- [ ] fail if `blake2b256(label ++ tld)` isn't added to resolvers state in Registry (AVL digest mismtach)
+- [x] fail if `tld` doesn't exist in registrars AVL tree
+- [x] fail if `label` is invalid (TODO what is a "valid" label)
+- [x] ensure `Resolver` out box
+  - [x] fail if propBytes != `Resolver.es`
+  - [x] fail if in-box `label` mismatch
+  - [x] fail if in-box `tld` mismatch
+  - [x] fail if in-box `address` mismatch
+  - [x] contains nft
 - [ ] fail if invalid funds paid (TODO determine "valid" payment)
-- [ ] fail if successor propBytes or tokens changed
+- [x] fail if successor propBytes or tokens changed
+- [x] mints resolver box
 
 ### `Resolver.es`
 
-TODO
+- [ ] label preserved
+- [ ] tld preserved
+- [ ] nft preserved
+- [ ] script preserved

@@ -40,7 +40,8 @@
 
   // registers
   val label = SELF.R4[Coll[Byte]].get
-  val registrarTld = SELF.R5[Coll[Byte]].get
+  val tld = SELF.R5[Coll[Byte]].get
+  val resolveAddress = SELF.R6[Coll[Byte]].get
 
   // scripts
   val resolverScriptHash = fromBase16("$resolverScriptHash")
@@ -58,19 +59,23 @@
   val validTld = {
     val tldProof = getVar[Coll[Byte]](0).get
     val currentRegistrars = registryInBox.R4[AvlTree].get
-    val hashedTld = blake2b256(registrarTld)
+    val hashedTld = blake2b256(tld)
 
     currentRegistrars.contains(hashedTld, tldProof)
   }
 
   val validResolverBox = {
+    // valid script
     val validScript = blake2b256(resolverOutBox.propositionBytes) == resolverScriptHash
+    // valid registers
     val validOutLabel = resolverOutBox.R4[Coll[Byte]].get == label
-    val validOutTld = resolverOutBox.R5[Coll[Byte]].get == registrarTld
+    val validOutTld = resolverOutBox.R5[Coll[Byte]].get == tld
+    val validAddress = resolverOutBox.R6[Coll[Byte]].get == resolveAddress
+    // valid nft
     val nft = resolverOutBox.tokens(0)
     val validOutNft = nft._1 == expectedNftId && nft._2 == 1L
 
-    validScript && validOutLabel && validOutTld && validOutNft
+    validScript && validOutLabel && validOutTld && validAddress && validOutNft
   }
 
   val validResolverTreeUpdate = {

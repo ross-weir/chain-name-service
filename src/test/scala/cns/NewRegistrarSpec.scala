@@ -1,15 +1,16 @@
 package cns
 
 import cns.Constants.{newRegistrarNft, newRegistrarScript, registryAdminNft, registryScript}
+import io.getblok.getblok_plasma.ByteConversion.{convertsArrBytes, convertsString}
 import io.getblok.getblok_plasma.PlasmaParameters
 import io.getblok.getblok_plasma.collections.PlasmaMap
-import io.getblok.getblok_plasma.ByteConversion.{convertsArrBytes, convertsString}
+import org.ergoplatform.ErgoAddressEncoder
+import org.ergoplatform.ErgoAddressEncoder.TestnetNetworkPrefix
+import org.ergoplatform.appkit._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should
-import org.ergoplatform.ErgoAddressEncoder
-import org.ergoplatform.appkit.{Address, ConstantsBuilder, ContextVar, ErgoClient,  ErgoId, ErgoToken, ErgoValue, NetworkType, RestApiErgoClient}
-import sigmastate.AvlTreeFlags
 import scorex.crypto.hash.Blake2b256
+import sigmastate.AvlTreeFlags
 import sigmastate.lang.exceptions.InterpreterException
 
 class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
@@ -28,11 +29,9 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
   "RandomTest" should "dothing" in {
     val script =
       s"""{
-         |  val a: Coll[Byte] = Coll(".")
-         |  val b: Coll[Byte] = Coll(2.toByte)
-         |  val c = a ++ b
+         |  val scriptHash = SELF.R4[Coll[Byte]].get
          |
-         |  sigmaProp(c.size == 2)
+         |  sigmaProp(blake2b256(OUTPUTS(0).propositionBytes) == scriptHash)
          |}""".stripMargin
 
     ergoClient.execute(ctx => {
@@ -42,23 +41,22 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
 
       val tb = ctx.newTxBuilder()
 
-      val map = new PlasmaMap[String, String](AvlTreeFlags.AllOperationsAllowed, PlasmaParameters.default)
-      val insertion = map.insert(("40e9e6112fc16e191e69d042890945b97a3eb30bccd3f39d5a07ee5e91b5fbbc", "01"))
+      val compiledScript = Utils.compile(Map.empty, script, TestnetNetworkPrefix)
+      val bytes = compiledScript.bytes
+      val hashedScript = Blake2b256.hash(bytes)
 
       val inBox =
         tb
           .outBoxBuilder
           .value(100000000000000000L)
-          .registers(map.ergoValue)
+          .registers(ErgoValue.of(hashedScript))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), script))
           .build()
           .convertToInputWith("f9e5ce5aa0d95f5d54a7bc89c46730d9662397067250aa18a0039631c0f5b807", 1)
-          .withContextVars(new ContextVar(0.toByte, insertion.proof.ergoValue))
 
       val outBox =
         tb
           .outBoxBuilder()
-          .registers(map.ergoValue)
           .contract(ctx.compileContract(ConstantsBuilder.empty(), script))
           .build()
 
@@ -69,7 +67,7 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
 
-      val _ = prover.sign(tx)
+//      val _ = prover.sign(tx)
 
       println("success")
     })
