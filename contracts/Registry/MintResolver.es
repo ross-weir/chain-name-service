@@ -101,6 +101,9 @@
   val validFundsPaid = {
     val amountPaid = registryOutBox.value - registryInBox.value
 
+    // TODO payment to contract dev
+    // TODO payment to ui dev
+    // TODO remaining funds to DAO
     // TODO actual price calculations
     amountPaid > 100000
   }
