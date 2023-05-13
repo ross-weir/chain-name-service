@@ -1,7 +1,9 @@
 ## Notes
 
-- We could allow only submitting hashed names for better anon - chain observers couldn't see what name was used for resolution but then couldn't check for illegal characters
+- We could allow only submitting hashed names for better anon, this is the approach ENS uses - chain observers couldn't see what name was used for resolution but then couldn't check for illegal characters
   - Should we have illegal characters or allow everything?
+  - Seems like we should disallow `.` if we have subresolvers otherwise we could get `pay.alice.erg` where `alice.erg` is the resolver and `pay` is the subresolver and also `pay.alice.erg` where `pay.alice` is the resolver and there is no subresolver. A user wouldn't be able to tell the 2 apart?
+  - By not using hashed names are we vulnerable to front running?
 
 ## TODO
 
@@ -17,6 +19,7 @@
 ## Testing
 
 TODO: setup test fixtures so all test cases use exactly the same tx as the success case except for the aspect under test
+This is the current setup but copy+pasted for each test, use fixtures
 
 ### `NewRegistrar.es`
 
@@ -26,20 +29,6 @@ TODO: setup test fixtures so all test cases use exactly the same tx as the succe
 - [x] fail if registrars state in Registry isn't updated correctly (AVL digest mismatch)
 - [ ] fail if successor box propBytes changed or nft changed
 - [x] add new registrar to Registry
-
-### `MintResolver.es`
-
-- [x] fail if `tld` doesn't exist in registrars AVL tree
-- [x] fail if `label` is invalid (TODO what is a "valid" label)
-- [x] ensure `Resolver` out box
-  - [x] fail if propBytes != `Resolver.es`
-  - [x] fail if in-box `label` mismatch
-  - [x] fail if in-box `tld` mismatch
-  - [x] fail if in-box `address` mismatch
-  - [x] contains nft
-- [ ] fail if invalid funds paid (TODO determine "valid" payment)
-- [x] fail if successor propBytes or tokens changed
-- [x] mints resolver box
 
 ### `Resolver.es`
 

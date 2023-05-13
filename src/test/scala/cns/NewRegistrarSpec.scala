@@ -14,7 +14,7 @@ import sigmastate.AvlTreeFlags
 import sigmastate.lang.exceptions.InterpreterException
 
 class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
-  val ergoClient: ErgoClient = RestApiErgoClient.create("https://tn-ergonode-api.ergohost.io", NetworkType.TESTNET, "", "")
+  val ergoClient: ErgoClient = RestApiErgoClient.create("http://127.0.0.1:9052/", NetworkType.TESTNET, "", "")
   val addrEnc = new ErgoAddressEncoder(NetworkType.TESTNET.networkPrefix)
   val fakeIndex: Short = 1
   val fakeTxId1 = "f9e5ce5aa0d95f5d54a7bc89c46730d9662397067250aa18a0039631c0f5b809"
@@ -263,6 +263,77 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .tokens(new ErgoToken(newRegistrarNft, 1))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), newRegistrarScript))
+          .build()
+
+      val tx = tb
+        .fee(1e7.toLong)
+        .addInputs(registryInBox, newRegistrarInBox)
+        .addDataInputs(adminBox)
+        .addOutputs(registryOutBox, newRegistrarOutBox)
+        .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
+        .build()
+
+      (the[InterpreterException] thrownBy prover.sign(tx)).getMessage should be("Script reduced to false")
+    })
+  }
+
+  "NewRegistrar" should "fail if successor script changed" in {
+    ergoClient.execute(ctx => {
+      val prover = ctx.newProverBuilder()
+        .withDLogSecret(BigInt.apply(0).bigInteger)
+        .build()
+
+      // coll[byte] -> byte (blake2b256(tld) -> 1)
+      val registrarsMap = new PlasmaMap[Array[Byte], String](AvlTreeFlags.AllOperationsAllowed, PlasmaParameters.default)
+      // coll[byte] -> ErgoId (hashed name -> nft)
+      val resolversMap = new PlasmaMap[Array[Byte], ErgoId](AvlTreeFlags.AllOperationsAllowed, PlasmaParameters.default)
+      val tldToMint = "erg"
+      val hashedTld = Blake2b256.hash(tldToMint)
+
+      val tb = ctx.newTxBuilder()
+
+      val adminBox =
+        tb
+          .outBoxBuilder
+          .value(minStorageRent)
+          .tokens(new ErgoToken(registryAdminNft, 1))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+          .build()
+          .convertToInputWith(fakeTxId2, fakeIndex)
+
+      val registryInBox =
+        tb
+          .outBoxBuilder
+          .value(100000000000000000L)
+          .registers(registrarsMap.ergoValue, resolversMap.ergoValue)
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), registryScript))
+          .build()
+          .convertToInputWith(fakeTxId3, fakeIndex)
+
+      var newRegistrarInBox =
+        tb
+          .outBoxBuilder
+          .value(100000000000000000L)
+          .tokens(new ErgoToken(newRegistrarNft, 1))
+          .registers(ErgoValue.of(tldToMint.getBytes))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), newRegistrarScript))
+          .build()
+          .convertToInputWith(fakeTxId2, fakeIndex)
+      val updatedRegistrarsMapResult = registrarsMap.insert((hashedTld, "01"))
+      newRegistrarInBox = newRegistrarInBox.withContextVars(new ContextVar(0.toByte, updatedRegistrarsMapResult.proof.ergoValue))
+
+      val registryOutBox =
+        tb
+          .outBoxBuilder()
+          .registers(registrarsMap.ergoValue, resolversMap.ergoValue)
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), registryScript))
+          .build()
+
+      val newRegistrarOutBox =
+        tb
+          .outBoxBuilder
+          .tokens(new ErgoToken(newRegistrarNft, 1))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
           .build()
 
       val tx = tb

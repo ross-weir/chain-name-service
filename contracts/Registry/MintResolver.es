@@ -14,10 +14,12 @@
   // 2               |  Resolver      |
   //
   // REGISTERS
-  //  R4: (Coll[Byte]) Label (name) that is used to resolve an address.
-  //  R5: (Coll[Byte]) Registrar/TLD, "erg" for example.
-  //  R6: (Coll[Byte]) Address to resolve to, this should be set based on the TLD.
-  //                   For example if TLD is "erg" an Ergo address, if TLD is "ada" a Cardano address.
+  //  R4: (GroupElement)  PK of the buyer, transaction must be signed with the associated SK to ensure
+  //                        the buyer can spend/use the Resolver.
+  //  R5: (Coll[Byte])    Label (name) that is used to resolve an address.
+  //  R6: (Coll[Byte])    Registrar/TLD, "erg" for example.
+  //  R7: (Coll[Byte])    Address to resolve to, this should be set based on the TLD.
+  //                        For example if TLD is "erg" an Ergo address, if TLD is "ada" a Cardano address.
   //
   // VARIABLES
   //  0: (Coll[Byte]) Registrars AVL tree proof
@@ -25,7 +27,8 @@
 
   // constants
   // Could use a configuration box or something?
-  val MaxLabelLength = 15 // could probably be longer?
+  val MinLabelLength = 3
+  val MaxLabelLength = 15 // could probably be longer
 
   // indexes
   val registryIndex = 0
@@ -39,9 +42,10 @@
   val resolverOutBox = OUTPUTS(resolverIndex)
 
   // registers
-  val label = SELF.R4[Coll[Byte]].get
-  val tld = SELF.R5[Coll[Byte]].get
-  val resolveAddress = SELF.R6[Coll[Byte]].get
+  val buyerPk = SELF.R4[GroupElement].get
+  val label = SELF.R5[Coll[Byte]].get
+  val tld = SELF.R6[Coll[Byte]].get
+  val resolveAddress = SELF.R7[Coll[Byte]].get
 
   // scripts
   val resolverScriptHash = fromBase16("$resolverScriptHash")
@@ -49,8 +53,11 @@
   val expectedNftId = INPUTS(0).id
 
   // validity
+  // ensure buyer can actually use the Resolver
+  val validOwner = proveDlog(buyerPk)
+
   val validLabel = {
-    val validLength = label.size <= MaxLabelLength
+    val validLength = label.size <= MaxLabelLength && label.size >= MinLabelLength
     // TODO label doesnt contain invalid characters
 
     validLength
@@ -68,14 +75,15 @@
     // valid script
     val validScript = blake2b256(resolverOutBox.propositionBytes) == resolverScriptHash
     // valid registers
-    val validOutLabel = resolverOutBox.R4[Coll[Byte]].get == label
-    val validOutTld = resolverOutBox.R5[Coll[Byte]].get == tld
-    val validAddress = resolverOutBox.R6[Coll[Byte]].get == resolveAddress
+    val validOwnerPk = resolverOutBox.R4[GroupElement].get == buyerPk
+    val validOutLabel = resolverOutBox.R5[Coll[Byte]].get == label
+    val validOutTld = resolverOutBox.R6[Coll[Byte]].get == tld
+    val validAddress = resolverOutBox.R7[Coll[Byte]].get == resolveAddress
     // valid nft
     val nft = resolverOutBox.tokens(0)
     val validOutNft = nft._1 == expectedNftId && nft._2 == 1L
 
-    validScript && validOutLabel && validOutTld && validAddress && validOutNft
+    validScript && validOwnerPk && validOutLabel && validOutTld && validAddress && validOutNft
   }
 
   val validResolverTreeUpdate = {
@@ -101,7 +109,7 @@
   val validSuccessorBox = successorOutBox.propositionBytes == SELF.propositionBytes && // script preserved
     successorOutBox.tokens == SELF.tokens // nft preserved
 
-  sigmaProp(
+  validOwner && sigmaProp(
     validLabel &&
     validTld &&
     validResolverBox &&
