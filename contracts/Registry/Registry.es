@@ -14,8 +14,9 @@
   //
   //   Input         |  Output        |  Data-Input
   // -----------------------------------------------
-  // 0 Registry      |  Registry      |  RegistryAdmin
+  // 0 Registry      |  Registry      |
   // 1 NewRegistrar  |  NewRegistrar  |
+  // 2 RegistryAdmin |  RegistryAdmin |
   //
   // [2] Mint Resolver
   // Creates a resolver box/nft that is used for address resolution.

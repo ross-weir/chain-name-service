@@ -14,10 +14,9 @@
   //
   //   Input         |  Output        |  Data-Input
   // -----------------------------------------------
-  // 0 Registry      |  Registry      |  RegistryAdmin
+  // 0 Registry      |  Registry      |
   // 1 NewRegistrar  |  NewRegistrar  |
-  //
-  // This box: new-registrar box
+  // 2 RegistryAdmin |  RegistryAdmin |
   //
   // TOKENS
   //  tokens(0): newRegistrarNft
@@ -31,9 +30,7 @@
   // indexes
   val registryIndex = 0
   val selfIndex = 1
-
-  // data inputs
-  val registryAdminBoxIndex = 0
+  val registryAdminIndex = 2
 
   // nfts
   val registryAdminNft = fromBase16("$registryAdminNft")
@@ -42,7 +39,8 @@
   val successorOutBox = OUTPUTS(selfIndex)
   val registryInBox = INPUTS(registryIndex)
   val registryOutBox = OUTPUTS(registryIndex)
-  val registryAdminBox = CONTEXT.dataInputs(registryAdminBoxIndex)
+  val registryAdminInBox = INPUTS(registryAdminIndex)
+  val registryAdminOutBox = OUTPUTS(registryAdminIndex)
 
   // validity
   val validNewRegistrar = {
@@ -65,10 +63,11 @@
   val validSuccessorBox = successorOutBox.propositionBytes == SELF.propositionBytes && // script preserved
     successorOutBox.tokens == SELF.tokens // nft preserved
 
-  // user permissions valid
-  // TODO can anyone use this as a data input or only the owner of the box?
-  // this might need to be a spendable box, not a data input
-  val isAdmin = registryAdminBox.tokens(0)._1 == registryAdminNft
+  // admin nft is preserved
+  val validAdminOutBox = registryAdminInBox.tokens == registryAdminOutBox.tokens
 
-  sigmaProp(isAdmin && validSuccessorBox && validNewRegistrar)
+  // user permissions valid
+  val isAdmin = registryAdminInBox.tokens(0)._1 == registryAdminNft
+
+  sigmaProp(isAdmin && validSuccessorBox && validAdminOutBox && validNewRegistrar)
 }

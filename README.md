@@ -7,7 +7,6 @@
 
 ## TODO
 
-- `NewRegistrar` admin check needs to be validated, if anyone can use a box belonging to anyone as a data input it wont work
 - Fees for contract developer & ui developer when minting a Resolver
 - Stable pricing using oracle USD price feed
 - Scalability - only one name can be minted per tx (per block i think?)
@@ -32,7 +31,7 @@ This is the current setup but copy+pasted for each test, use fixtures
 
 ### `Resolver.es`
 
-- [ ] label preserved
-- [ ] tld preserved
-- [ ] nft preserved
-- [ ] script preserved
+- [x] label preserved
+- [x] tld preserved
+- [x] nft preserved
+- [x] script preserved

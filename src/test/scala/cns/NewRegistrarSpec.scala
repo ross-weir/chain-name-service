@@ -4,9 +4,10 @@ import cns.Constants.{newRegistrarNft, newRegistrarScript, registryAdminNft, reg
 import io.getblok.getblok_plasma.ByteConversion.{convertsArrBytes, convertsString}
 import io.getblok.getblok_plasma.PlasmaParameters
 import io.getblok.getblok_plasma.collections.PlasmaMap
-import org.ergoplatform.ErgoAddressEncoder
+import org.ergoplatform.{ErgoAddressEncoder, P2PKAddress}
 import org.ergoplatform.ErgoAddressEncoder.TestnetNetworkPrefix
 import org.ergoplatform.appkit._
+import org.ergoplatform.wallet.secrets.ExtendedSecretKey
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should
 import scorex.crypto.hash.Blake2b256
@@ -35,9 +36,22 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
          |}""".stripMargin
 
     ergoClient.execute(ctx => {
+      val mnemonic = SecretString.create("not real mnemonic")
+      val rootSecret = JavaHelpers.seedToMasterKey(mnemonic, SecretString.empty(), true)
+      val path = JavaHelpers.eip3DerivationParent
+      val secretKey = rootSecret.derive(path).asInstanceOf[ExtendedSecretKey]
+
+      implicit val encoder: ErgoAddressEncoder = ErgoAddressEncoder(ErgoAddressEncoder.TestnetNetworkPrefix)
+      val p2pk = P2PKAddress(secretKey.publicImage)
+      val p2pkContract = ctx.newContract(p2pk.script)
+
       val prover = ctx.newProverBuilder()
         .withDLogSecret(BigInt.apply(0).bigInteger)
+        .withDLogSecret(secretKey.privateInput.w)
         .build()
+
+//      val addr = Address.create("")
+//      val p2pkContract = Address.create("").toErgoContract
 
       val tb = ctx.newTxBuilder()
 
@@ -45,29 +59,39 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
       val bytes = compiledScript.bytes
       val hashedScript = Blake2b256.hash(bytes)
 
+      val adminBox =
+        tb
+          .outBoxBuilder
+          .value(minStorageRent)
+          .tokens(new ErgoToken("94af8793a1f7b427831dcb48368ffc55c68d319d525ea24510ac38b75e280a8d", 1)) // incorrect token id
+          .contract(p2pkContract)
+          .build()
+          .convertToInputWith(fakeTxId2, fakeIndex)
+
       val inBox =
         tb
           .outBoxBuilder
           .value(100000000000000000L)
           .registers(ErgoValue.of(hashedScript))
-          .contract(ctx.compileContract(ConstantsBuilder.empty(), script))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
           .build()
           .convertToInputWith("f9e5ce5aa0d95f5d54a7bc89c46730d9662397067250aa18a0039631c0f5b807", 1)
 
       val outBox =
         tb
           .outBoxBuilder()
-          .contract(ctx.compileContract(ConstantsBuilder.empty(), script))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
           .build()
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(inBox)
+        .addInputs(inBox, adminBox)
         .addOutputs(outBox)
+//        .addDataInputs(adminBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
 
-//      val _ = prover.sign(tx)
+      val _ = prover.sign(tx)
 
       println("success")
     })
@@ -194,11 +218,18 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
           .contract(ctx.compileContract(ConstantsBuilder.empty(), newRegistrarScript))
           .build()
 
+      val adminOutBox =
+        tb
+          .outBoxBuilder
+          .value(minStorageRent)
+          .tokens(new ErgoToken("94af8793a1f7b427831dcb48368ffc55c68d319d525ea24510ac38b75e280a8d", 1)) // incorrect token id
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+          .build()
+
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, newRegistrarInBox)
-        .addDataInputs(adminBox)
-        .addOutputs(registryOutBox, newRegistrarOutBox)
+        .addInputs(registryInBox, newRegistrarInBox, adminBox)
+        .addOutputs(registryOutBox, newRegistrarOutBox, adminOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
 
@@ -224,7 +255,7 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
         tb
           .outBoxBuilder
           .value(minStorageRent)
-          .tokens(new ErgoToken(registryAdminNft, 1)) // incorrect token id
+          .tokens(new ErgoToken(registryAdminNft, 1))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -265,11 +296,18 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
           .contract(ctx.compileContract(ConstantsBuilder.empty(), newRegistrarScript))
           .build()
 
+      val adminOutBox =
+        tb
+          .outBoxBuilder
+          .value(minStorageRent)
+          .tokens(new ErgoToken(registryAdminNft, 1))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+          .build()
+
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, newRegistrarInBox)
-        .addDataInputs(adminBox)
-        .addOutputs(registryOutBox, newRegistrarOutBox)
+        .addInputs(registryInBox, newRegistrarInBox, adminBox)
+        .addOutputs(registryOutBox, newRegistrarOutBox, adminOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
 
@@ -336,11 +374,18 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
           .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
           .build()
 
+      val adminOutBox =
+        tb
+          .outBoxBuilder
+          .value(minStorageRent)
+          .tokens(new ErgoToken(registryAdminNft, 1))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+          .build()
+
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, newRegistrarInBox)
-        .addDataInputs(adminBox)
-        .addOutputs(registryOutBox, newRegistrarOutBox)
+        .addInputs(registryInBox, newRegistrarInBox, adminBox)
+        .addOutputs(registryOutBox, newRegistrarOutBox, adminOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
 
@@ -407,11 +452,18 @@ class NewRegistrarSpec extends AnyFlatSpec with should.Matchers {
           .contract(ctx.compileContract(ConstantsBuilder.empty(), newRegistrarScript))
           .build()
 
+      val adminOutBox =
+        tb
+          .outBoxBuilder
+          .value(minStorageRent)
+          .tokens(new ErgoToken(registryAdminNft, 1))
+          .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+          .build()
+
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, newRegistrarInBox)
-        .addDataInputs(adminBox)
-        .addOutputs(registryOutBox, newRegistrarOutBox)
+        .addInputs(registryInBox, newRegistrarInBox, adminBox)
+        .addOutputs(registryOutBox, newRegistrarOutBox, adminOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
 
