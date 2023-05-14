@@ -7,18 +7,24 @@
   // Creates a resolver box/nft that is used for address resolution.
   // This action is called by users to create resolvers for their specified label (name) and registrar (TLD).
   //
+  // The buyer must submit a commitment box in the transaction to prevent frontrunning.
+  // A commitment is valid if:
+  //  - The box was created more than `MinCommitmentAge` blocks ago & less than `MaxCommitmentAge` blocks ago.
+  //  - The R4 of the box contains a value of blake2b256(secret ++ buyerPk ++ label ++ tld ++ address) - commitment hash.
+  //
   //   Input         |  Output        |  Data-Input
   // -----------------------------------------------
   // 0 Registry      |  Registry      |
   // 1 MintResolver  |  MintResolver  |
-  // 2               |  Resolver      |
+  // 2 Commitment    |  Resolver      |
   //
   // REGISTERS
-  //  R4: (GroupElement)  PK of the buyer, transaction must be signed with the associated SK to ensure
+  //  R4: (Coll[Byte])    Commitment secret.
+  //  R5: (GroupElement)  PK of the buyer, transaction must be signed with the associated SK to ensure
   //                        the buyer can spend/use the Resolver.
-  //  R5: (Coll[Byte])    Label (name) that is used to resolve an address.
-  //  R6: (Coll[Byte])    Registrar/TLD, "erg" for example.
-  //  R7: (Coll[Byte])    Address to resolve to, this should be set based on the TLD.
+  //  R6: (Coll[Byte])    Label (name) that is used to resolve an address.
+  //  R7: (Coll[Byte])    Registrar/TLD, "erg" for example.
+  //  R8: (Coll[Byte])    Address to resolve to, this should be set based on the TLD.
   //                        For example if TLD is "erg" an Ergo address, if TLD is "ada" a Cardano address.
   //
   // VARIABLES
@@ -29,23 +35,28 @@
   // Could use a configuration box or something?
   val MinLabelLength = 3
   val MaxLabelLength = 15 // could probably be longer
+  val MinCommitmentAge = 3 // 3 blocks, ~30 mins
+  val MaxCommitmentAge = 18 // 18 blocks, ~3 hours
 
   // indexes
   val registryIndex = 0
   val selfIndex = 1
-  val resolverIndex = 2
+  val resolverOutIndex = 2
+  val commitmentInIndex = 2
 
   // boxes
   val successorOutBox = OUTPUTS(selfIndex)
   val registryInBox = INPUTS(registryIndex)
   val registryOutBox = OUTPUTS(registryIndex)
-  val resolverOutBox = OUTPUTS(resolverIndex)
+  val resolverOutBox = OUTPUTS(resolverOutIndex)
+  val commitmentInBox = INPUTS(commitmentInIndex)
 
   // registers
-  val buyerPk = SELF.R4[GroupElement].get
-  val label = SELF.R5[Coll[Byte]].get
-  val tld = SELF.R6[Coll[Byte]].get
-  val resolveAddress = SELF.R7[Coll[Byte]].get
+  val commitmentSecret = SELF.R4[Coll[Byte]].get
+  val buyerPk = SELF.R5[GroupElement].get
+  val label = SELF.R6[Coll[Byte]].get
+  val tld = SELF.R7[Coll[Byte]].get
+  val resolveAddress = SELF.R8[Coll[Byte]].get
 
   // scripts
   val resolverScriptHash = fromBase16("$resolverScriptHash")
@@ -53,6 +64,23 @@
   val expectedNftId = INPUTS(0).id
 
   // validity
+  val validCommitment = {
+    // valid commit age
+    val commitAge = HEIGHT - commitmentInBox.creationInfo._1
+    val validCommitAge = commitAge >= MinCommitmentAge && commitAge <= MaxCommitmentAge
+    // valid commit hash
+    val expectedCommitment = blake2b256(
+      commitmentSecret ++
+      buyerPk ++
+      label ++
+      tld ++
+      resolveAddress
+    )
+    val actualCommitment = commitmentInBox.R4[Coll[Byte]].get
+
+    (expectedCommitment == actualCommitment) && validCommitAge
+  }
+
   // ensure buyer can actually use the Resolver
   val validOwner = proveDlog(buyerPk)
 
@@ -75,10 +103,10 @@
     // valid script
     val validScript = blake2b256(resolverOutBox.propositionBytes) == resolverScriptHash
     // valid registers
-    val validOwnerPk = resolverOutBox.R4[GroupElement].get == buyerPk
-    val validOutLabel = resolverOutBox.R5[Coll[Byte]].get == label
-    val validOutTld = resolverOutBox.R6[Coll[Byte]].get == tld
-    val validAddress = resolverOutBox.R7[Coll[Byte]].get == resolveAddress
+    val validOwnerPk = resolverOutBox.R5[GroupElement].get == buyerPk
+    val validOutLabel = resolverOutBox.R6[Coll[Byte]].get == label
+    val validOutTld = resolverOutBox.R7[Coll[Byte]].get == tld
+    val validAddress = resolverOutBox.R8[Coll[Byte]].get == resolveAddress
     // valid nft
     val nft = resolverOutBox.tokens(0)
     val validOutNft = nft._1 == expectedNftId && nft._2 == 1L
@@ -113,6 +141,7 @@
     successorOutBox.tokens == SELF.tokens // nft preserved
 
   validOwner && sigmaProp(
+    validCommitment &&
     validLabel &&
     validTld &&
     validResolverBox &&
