@@ -22,11 +22,16 @@
   // Creates a resolver box/nft that is used for address resolution.
   // This action is called by users to create resolvers for their specified label (name) and registrar (TLD).
   //
+  // The buyer must submit a commitment box in the transaction to prevent frontrunning.
+  // A commitment is valid if:
+  //  - The box was created more than `MinCommitmentAge` blocks ago & less than `MaxCommitmentAge` blocks ago.
+  //  - The R4 of the box contains a value of blake2b256(secret ++ encoded(buyerPk) ++ label ++ tld ++ address) - commitment hash.
+  //
   //   Input         |  Output        |  Data-Input
   // -----------------------------------------------
   // 0 Registry      |  Registry      |
   // 1 MintResolver  |  MintResolver  |
-  // 2               |  Resolver      |
+  // 2 Commitment    |  Resolver      |
   //
   // REGISTERS
   //  R4: (AvlTree) Registrars Avl tree.

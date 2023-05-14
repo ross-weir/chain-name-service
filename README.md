@@ -1,10 +1,5 @@
 ## Notes
 
-- We could allow only submitting hashed names for better anon, this is the approach ENS uses - chain observers couldn't see what name was used for resolution but then couldn't check for illegal characters
-  - Should we have illegal characters or allow everything?
-  - Seems like we should disallow `.` if we have subresolvers otherwise we could get `pay.alice.erg` where `alice.erg` is the resolver and `pay` is the subresolver and also `pay.alice.erg` where `pay.alice` is the resolver and there is no subresolver. A user wouldn't be able to tell the 2 apart?
-  - By not using hashed names are we vulnerable to front running?
-
 ## TODO
 
 - Fees for contract developer & ui developer when minting a Resolver

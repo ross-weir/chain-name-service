@@ -10,7 +10,7 @@
   // The buyer must submit a commitment box in the transaction to prevent frontrunning.
   // A commitment is valid if:
   //  - The box was created more than `MinCommitmentAge` blocks ago & less than `MaxCommitmentAge` blocks ago.
-  //  - The R4 of the box contains a value of blake2b256(secret ++ buyerPk ++ label ++ tld ++ address) - commitment hash.
+  //  - The R4 of the box contains a value of blake2b256(secret ++ encoded(buyerPk) ++ label ++ tld ++ address) - commitment hash.
   //
   //   Input         |  Output        |  Data-Input
   // -----------------------------------------------
@@ -71,7 +71,7 @@
     // valid commit hash
     val expectedCommitment = blake2b256(
       commitmentSecret ++
-      buyerPk ++
+      buyerPk.getEncoded ++
       label ++
       tld ++
       resolveAddress
