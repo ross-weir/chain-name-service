@@ -103,10 +103,10 @@
     // valid script
     val validScript = blake2b256(resolverOutBox.propositionBytes) == resolverScriptHash
     // valid registers
-    val validOwnerPk = resolverOutBox.R5[GroupElement].get == buyerPk
-    val validOutLabel = resolverOutBox.R6[Coll[Byte]].get == label
-    val validOutTld = resolverOutBox.R7[Coll[Byte]].get == tld
-    val validAddress = resolverOutBox.R8[Coll[Byte]].get == resolveAddress
+    val validOwnerPk = resolverOutBox.R4[GroupElement].get == buyerPk
+    val validOutLabel = resolverOutBox.R5[Coll[Byte]].get == label
+    val validOutTld = resolverOutBox.R6[Coll[Byte]].get == tld
+    val validAddress = resolverOutBox.R7[Coll[Byte]].get == resolveAddress
     // valid nft
     val nft = resolverOutBox.tokens(0)
     val validOutNft = nft._1 == expectedNftId && nft._2 == 1L

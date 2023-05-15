@@ -7,12 +7,14 @@ import io.getblok.getblok_plasma.ByteConversion.{convertsArrBytes, convertsStrin
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should
 import org.ergoplatform.ErgoAddressEncoder
-import org.ergoplatform.appkit.{Address, ConstantsBuilder, ContextVar, ErgoClient, ErgoId, ErgoToken, ErgoValue, JavaHelpers, NetworkType, RestApiErgoClient, SecretString}
+import org.ergoplatform.appkit.{Address, BlockchainContext, ConstantsBuilder, ContextVar, ErgoClient, ErgoId, ErgoToken, ErgoValue, JavaHelpers, NetworkType, OutBox, OutBoxBuilder, RestApiErgoClient, SecretString, UnsignedTransactionBuilder}
 import org.ergoplatform.wallet.secrets.ExtendedSecretKey
 import sigmastate.AvlTreeFlags
 import scorex.crypto.hash.Blake2b256
 import sigmastate.eval.CostingSigmaDslBuilder.GroupElement
 import sigmastate.lang.exceptions.InterpreterException
+import special.sigma.GroupElement
+import scorex.utils.Random
 
 class MintResolverSpec extends AnyFlatSpec with should.Matchers {
   val ergoClient: ErgoClient = RestApiErgoClient.create("http://127.0.0.1:9052/", NetworkType.TESTNET, "", "")
@@ -31,6 +33,25 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
   val path = JavaHelpers.eip3DerivationParent
   val secretKey = rootSecret.derive(path).asInstanceOf[ExtendedSecretKey]
   val pkGe = GroupElement(secretKey.publicImage.value)
+  val commitmentSecret = Random.randomBytes(32)
+
+  def genCommitmentBox(builder: UnsignedTransactionBuilder, createHeight: Int, commitHash: Array[Byte]): OutBoxBuilder = {
+    builder
+      .outBoxBuilder
+      .value(100000000000000000L)
+      .registers(ErgoValue.of(commitHash))
+      .creationHeight(createHeight)
+  }
+
+  def makeCommitHash(secret: Array[Byte], buyerPk: GroupElement, label: String, tld: String, resolveAddress: String): Array[Byte] = {
+    Blake2b256.hash(
+      secret ++ buyerPk.getEncoded.toArray ++ label.getBytes ++ tld.getBytes ++ resolveAddress.getBytes
+    )
+  }
+
+  def getCommitmentHeight(ctx: BlockchainContext): Int = {
+    ctx.getHeight - 5
+  }
 
   "MintResolver" should "fail if tld doesn't exist" in {
     ergoClient.execute(ctx => {
@@ -67,7 +88,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of("non".getBytes), ErgoValue.of(resolvedToAddress.getBytes)) // changed tld to "non"
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of("non".getBytes), ErgoValue.of(resolvedToAddress.getBytes)) // changed tld to "non"
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -75,6 +96,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -101,7 +127,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -145,7 +171,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -153,6 +179,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -179,7 +210,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -223,7 +254,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -231,6 +262,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -257,7 +293,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -301,7 +337,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -309,6 +345,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -335,7 +376,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -379,7 +420,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -387,6 +428,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -413,7 +459,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -457,7 +503,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -465,6 +511,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -491,7 +542,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -535,7 +586,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -543,6 +594,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -568,7 +624,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -613,7 +669,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -621,6 +677,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -647,7 +708,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -691,7 +752,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -699,6 +760,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -725,7 +791,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -769,7 +835,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -777,6 +843,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -803,7 +874,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
@@ -847,7 +918,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
           .outBoxBuilder
           .value(500000000000000000L)
           .tokens(new ErgoToken(mintResolverNft, 1))
-          .registers(ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
+          .registers(ErgoValue.of(commitmentSecret), ErgoValue.of(pkGe), ErgoValue.of(label.getBytes), ErgoValue.of(tld.getBytes), ErgoValue.of(resolvedToAddress.getBytes))
           .contract(ctx.compileContract(ConstantsBuilder.empty(), mintResolverScript))
           .build()
           .convertToInputWith(fakeTxId2, fakeIndex)
@@ -855,6 +926,11 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
       mintResolverBox = mintResolverBox.withContextVars(
         new ContextVar(0.toByte, containsOp.proof.ergoValue),
         new ContextVar(1.toByte, insertLabel.proof.ergoValue))
+
+      val commitmentBox = genCommitmentBox(tb, getCommitmentHeight(ctx), makeCommitHash(commitmentSecret, pkGe, label, tld, resolvedToAddress))
+        .contract(ctx.compileContract(ConstantsBuilder.empty(), fakeScript))
+        .build()
+        .convertToInputWith(fakeTxId2, fakeIndex)
 
       val registryOutBox =
         tb
@@ -881,7 +957,7 @@ class MintResolverSpec extends AnyFlatSpec with should.Matchers {
 
       val tx = tb
         .fee(1e7.toLong)
-        .addInputs(registryInBox, mintResolverBox)
+        .addInputs(registryInBox, mintResolverBox, commitmentBox)
         .addOutputs(registryOutBox, mintResolverOutBox, resolverOutBox)
         .sendChangeTo(Address.create("4MQyML64GnzMxZgm"))
         .build()
